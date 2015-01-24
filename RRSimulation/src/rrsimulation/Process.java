@@ -25,6 +25,7 @@ public class Process {
     private int currentCpuBurstIndex = 0, currentIoBurstIndex = 0;
     private int id;
     private int totalcpuBursts = 0, totalIoBursts = 0;
+    private boolean ioInProgress=false;
     
     public Process(int id)
     {
@@ -138,7 +139,7 @@ public class Process {
                         if(temp<=0)
                         {
                             cpuBurstsList.remove(currentCpuBurstIndex);
-                            //currentCpuBurstIndex++;
+                            
                             if(!ioBurstsList.isEmpty())
                                 currentBurst = BurstType.IO;
                         }
@@ -159,7 +160,7 @@ public class Process {
                         if(temp<=0)
                         {
                             ioBurstsList.remove(currentIoBurstIndex);
-                            //currentIoBurstIndex++;
+                            
                             if(!cpuBurstsList.isEmpty())
                                 currentBurst = BurstType.CPU;
                         }
@@ -176,6 +177,92 @@ public class Process {
         return currentState;
     }
     
+    public int executeWithGivenQuantum(int quantum)
+    {
+        int quantumUsed=0;
+        if(cpuBurstsList.isEmpty() && ioBurstsList.isEmpty())
+        {
+            currentState = ProcessState.HALTED;
+            System.out.println("\t\tProcess " + id + " Halted ");
+            quantumUsed = 0;
+        }
+        else
+        {
+            switch(currentBurst)
+            {
+               case CPU:
+                   if(!cpuBurstsList.isEmpty())
+                   {
+                        int temp = cpuBurstsList.get(currentCpuBurstIndex);
+                        quantumUsed = (quantum<temp)? quantum : temp;
+                        try
+                        {
+                            Thread.sleep(quantumUsed);
+                        } catch(Exception e)
+                        {
+                            System.out.println("Exception thrown while executing CPU Burst- - " +  e.getMessage());                           
+                        }
+                        
+                        temp -= quantumUsed;
+                        if(temp<=0)
+                        {
+                            cpuBurstsList.remove(currentCpuBurstIndex);
+                            preformIo();
+                        }
+                        else
+                        {                        
+                            cpuBurstsList.remove(currentCpuBurstIndex);
+                            cpuBurstsList.add(currentCpuBurstIndex,temp);
+                            currentState = ProcessState.EXECUTING;
+                        }
+                   }
+                   break;
+
+               case IO:
+                   if(!ioInProgress)
+                   {
+                       preformIo();
+                       quantumUsed = 0;
+                   }    
+                   break;
+            }
+        }
+        return quantumUsed;
+    }
+    
+    private void preformIo()
+    {              
+        if(!ioBurstsList.isEmpty())
+        {
+            currentBurst = BurstType.IO;                                
+            currentState = ProcessState.IO;
+            ioInProgress = true;
+            int tempIo = ioBurstsList.get(currentIoBurstIndex);
+
+            Thread t = new Thread("Process IO") {
+
+                public void run() {
+                    try {
+                        Thread.sleep(tempIo);
+                    }
+                    catch(Exception e) {
+                        System.out.println("Exception thrown while executing IO Burst");
+                    }
+                    ioBurstsList.remove(currentIoBurstIndex);
+
+                    if(!cpuBurstsList.isEmpty())
+                    {
+                        currentBurst = BurstType.CPU;
+                        currentState = ProcessState.EXECUTING;
+                    }
+                                        
+                    ioInProgress = false;
+               }
+            };
+            t.start();
+        }
+    }
+    
     public void printDetails()
     {
         int maxIndex;
@@ -185,11 +272,10 @@ public class Process {
             maxIndex = numIoBursts;
             
         
-        System.out. printf("CPU Bursts(%.1f%%) \t\tI/O Bursts(%.1f%%) \n",percentageCpuBursts(),percentageIoBursts());
+        System.out. printf("S.No. \tCPU Bursts(%.1f%%) \t\tI/O Bursts(%.1f%%) \n",percentageCpuBursts(),percentageIoBursts());
         for(int i=0;i<maxIndex;i++)
         {
             System.out.println(i + "\t" +((i<numCpuBursts)?cpuBurstsList.get(i):"") + "\t\t\t" + ((i<numIoBursts)?ioBurstsList.get(i):""));
         }
-    }
-            
+    }            
 }
